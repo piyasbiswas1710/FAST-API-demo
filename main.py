@@ -18,6 +18,7 @@ class Patient(BaseModel):
     height: Annotated[float, Field(..., gt=0, description='Height of the patient in mtrs')]
     weight: Annotated[float, Field(..., gt=0, description='Weight of the patient in kgs')]
 
+
     @computed_field
     @property
     def bmi(self) -> float:
@@ -36,6 +37,16 @@ class Patient(BaseModel):
             return 'Overweight'
         else:
             return 'Obese'
+        
+
+# pydantic model for patient data update validation and serialization
+class PatientUpdate(BaseModel):
+    name: Annotated[Optional[str], Field(default=None)]
+    city: Annotated[Optional[str], Field(default=None)]
+    age: Annotated[Optional[int], Field(default=None, gt=0)]
+    gender: Annotated[Optional[Literal['male', 'female']], Field(default=None)]
+    height: Annotated[Optional[float], Field(default=None, gt=0)]
+    weight: Annotated[Optional[float], Field(default=None, gt=0)]
 
 
 #  To load the data from JSON file
@@ -125,3 +136,32 @@ def create_patient(patient: Patient):
     save_data(data)
 
     return JSONResponse(status_code=201, content={'message':'patient created successfully'})
+
+
+# update part
+# to create a update page to update the data into JSON file
+@app.put('/edit/{patient_id}')
+def update_patient( patient_update: PatientUpdate,patient_id: str= Path(..., description='ID of the patient in the DB', example='P001')):
+
+    data = load_data()
+
+    if patient_id not in data:
+        raise HTTPException(status_code=404, detail='Patient not found')
+    
+    existing_patient_info = data[patient_id]
+
+    updated_patient_info = patient_update.model_dump(exclude_unset=True)
+
+    for key, value in updated_patient_info.items():
+        existing_patient_info[key] = value
+
+    #existing_patient_info -> pydantic object -> updated bmi + verdict
+    existing_patient_info['id'] = patient_id
+    patient_pydandic_obj = Patient(**existing_patient_info)
+   # add this dict to data
+    data[patient_id] = patient_pydandic_obj.model_dump(exclude='id')
+
+    # save data
+    save_data(data)
+
+    return JSONResponse(status_code=200, content={'message':'patient updated'})
